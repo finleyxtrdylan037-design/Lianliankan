@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>连连看 · 二十关</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Sans+SC:wght@400;700&display=swap');
+
+:root {
+–bg-dark: #0a0c10;
+–bg-card: #151820;
+–bg-board: #0d0f14;
+–gold: #d4a853;
+–gold-dim: #8a6d2b;
+–jade: #4ecdc4;
+–jade-dim: #2a7a74;
+–red: #e74c3c;
+–text: #e8e0d0;
+–text-dim: #7a7468;
+–highlight: rgba(78, 205, 196, 0.3);
+–selected: rgba(212, 168, 83, 0.5);
+}
+
+- { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+background: var(–bg-dark);
+color: var(–text);
+font-family: ‘Noto Sans SC’, sans-serif;
+min-height: 100vh;
+overflow-x: hidden;
+}
+
+/* Background texture */
+body::before {
+content: ‘’;
+position: fixed;
+inset: 0;
+background:
+radial-gradient(ellipse at 20% 50%, rgba(78,205,196,0.03) 0%, transparent 50%),
+radial-gradient(ellipse at 80% 50%, rgba(212,168,83,0.03) 0%, transparent 50%);
+pointer-events: none;
+z-index: 0;
+}
+
+#app {
+position: relative;
+z-index: 1;
+display: flex;
+flex-direction: column;
+align-items: center;
+min-height: 100vh;
+padding: 10px;
+}
+
+/* ─── Title ─── */
+.game-title {
+font-family: ‘Ma Shan Zheng’, cursive;
+font-size: 2.2em;
+color: var(–gold);
+text-shadow: 0 0 20px rgba(212,168,83,0.3);
+margin: 8px 0 4px;
+letter-spacing: 0.1em;
+}
+
+/* ─── Top Bar ─── */
+.top-bar {
+display: flex;
+align-items: center;
+gap: 16px;
+flex-wrap: wrap;
+justify-content: center;
+margin-bottom: 8px;
+font-size: 0.95em;
+}
+
+.stat {
+display: flex;
+align-items: center;
+gap: 5px;
+color: var(–text-dim);
+}
+.stat .val {
+color: var(–jade);
+font-weight: 700;
+font-size: 1.1em;
+}
+.stat.time .val { color: var(–gold); }
+
+/* ─── Buttons ─── */
+.btn {
+border: 1px solid var(–gold-dim);
+background: rgba(212,168,83,0.08);
+color: var(–gold);
+padding: 6px 16px;
+border-radius: 4px;
+cursor: pointer;
+font-family: ‘Noto Sans SC’, sans-serif;
+font-size: 0.85em;
+transition: all 0.2s;
+}
+.btn:hover {
+background: rgba(212,168,83,0.2);
+border-color: var(–gold);
+}
+.btn:disabled {
+opacity: 0.3;
+cursor: not-allowed;
+}
+.btn.hint-btn { border-color: var(–jade-dim); color: var(–jade); background: rgba(78,205,196,0.08); }
+.btn.hint-btn:hover { background: rgba(78,205,196,0.2); border-color: var(–jade); }
+
+/* ─── Board ─── */
+.board-wrapper {
+position: relative;
+display: flex;
+justify-content: center;
+align-items: center;
+}
+
+canvas#gameCanvas {
+border: 1px solid rgba(212,168,83,0.15);
+border-radius: 6px;
+background: var(–bg-board);
+cursor: pointer;
+}
+
+/* ─── Overlays ─── */
+.overlay {
+position: fixed;
+inset: 0;
+background: rgba(10,12,16,0.92);
+display: flex;
+justify-content: center;
+align-items: center;
+z-index: 100;
+opacity: 0;
+pointer-events: none;
+transition: opacity 0.3s;
+}
+.overlay.active { opacity: 1; pointer-events: all; }
+
+.modal {
+background: var(–bg-card);
+border: 1px solid var(–gold-dim);
+border-radius: 12px;
+padding: 36px 44px;
+text-align: center;
+max-width: 400px;
+width: 90%;
+max-height: 85vh;
+overflow-y: auto;
+}
+.modal h2 {
+font-family: ‘Ma Shan Zheng’, cursive;
+font-size: 2em;
+color: var(–gold);
+margin-bottom: 12px;
+}
+.modal p {
+color: var(–text-dim);
+margin-bottom: 20px;
+line-height: 1.6;
+}
+.modal .btn { font-size: 1em; padding: 10px 28px; }
+
+.stars {
+font-size: 2em;
+margin-bottom: 10px;
+}
+
+/* ─── Level Select ─── */
+.level-grid {
+display: grid;
+grid-template-columns: repeat(5, 1fr);
+gap: 10px;
+margin: 16px 0;
+}
+.level-cell {
+width: 52px; height: 52px;
+border: 1px solid var(–gold-dim);
+border-radius: 8px;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+background: rgba(212,168,83,0.05);
+transition: all 0.2s;
+font-size: 1.1em;
+font-weight: 700;
+color: var(–gold);
+}
+.level-cell:hover { background: rgba(212,168,83,0.15); border-color: var(–gold); }
+.level-cell.locked {
+opacity: 0.3;
+cursor: not-allowed;
+color: var(–text-dim);
+border-color: #333;
+}
+.level-cell .cell-stars { font-size: 0.5em; margin-top: 2px; }
+.level-cell.current { border-color: var(–jade); color: var(–jade); box-shadow: 0 0 10px rgba(78,205,196,0.2); }
+
+/* ─── Progress Bar ─── */
+.progress-bar {
+width: 200px; height: 6px;
+background: #1a1d25;
+border-radius: 3px;
+overflow: hidden;
+}
+.progress-bar .fill {
+height: 100%;
+background: linear-gradient(90deg, var(–jade), var(–gold));
+border-radius: 3px;
+transition: width 0.4s;
+}
+
+/* ─── Link animation canvas ─── */
+canvas#linkCanvas {
+position: absolute;
+top: 0; left: 0;
+pointer-events: none;
+z-index: 10;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+.game-title { font-size: 1.6em; }
+.modal { padding: 24px; }
+.level-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.level-cell { width: 44px; height: 44px; font-size: 0.95em; }
+}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <div class="game-title">连 连 看</div>
+  <div class="top-bar">
+    <span class="stat">关卡 <span class="val" id="levelNum">1</span>/20</span>
+    <span class="stat time">⏱ <span class="val" id="timer">0</span>s</span>
+    <span class="stat">配对 <span class="val" id="pairsLeft">0</span></span>
+    <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+    <button class="btn hint-btn" id="hintBtn" onclick="useHint()">💡 提示 (<span id="hintCount">3</span>)</button>
+    <button class="btn" onclick="shuffleBoard()">🔀 重排</button>
+    <button class="btn" onclick="showLevelSelect()">📋 选关</button>
+  </div>
+
+  <div class="board-wrapper">
+    <canvas id="gameCanvas"></canvas>
+    <canvas id="linkCanvas"></canvas>
+  </div>
+</div>
+
+<!-- Win Overlay -->
+
+<div class="overlay" id="winOverlay">
+  <div class="modal">
+    <div class="stars" id="winStars"></div>
+    <h2 id="winTitle">过关！</h2>
+    <p id="winMsg"></p>
+    <button class="btn" onclick="nextLevel()" id="nextBtn">下一关 →</button>
+    <button class="btn" onclick="showLevelSelect()" style="margin-left:8px">选关</button>
+  </div>
+</div>
+
+<!-- Level Select Overlay -->
+
+<div class="overlay" id="levelOverlay">
+  <div class="modal">
+    <h2>选择关卡</h2>
+    <div class="level-grid" id="levelGrid"></div>
+    <button class="btn" onclick="closeLevelSelect()">返回</button>
+    <div style="margin-top:16px;border-top:1px solid #2a2a2a;padding-top:12px;">
+      <button class="btn" id="cheatBtn" style="font-size:0.8em;opacity:0.5;border-color:#444;color:#888;">🔓 作弊模式</button>
+    </div>
+  </div>
+</div>
+
+<!-- All-Clear Overlay -->
+
+<div class="overlay" id="allClearOverlay">
+  <div class="modal">
+    <h2>🎉 全部通关！</h2>
+    <p>恭喜你完成了全部20关！<br>你是连连看大师！</p>
+    <button class="btn" onclick="resetAll()">重新开始</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  连连看 - 20 Levels
+// ══════════════════════════════════════════════
+
+// ─── Emoji sets by theme ───
+const EMOJI_SETS = [
+  // Fruits (16)
+  ['🍎','🍊','🍋','🍇','🍉','🍓','🍑','🍒','🥝','🍍','🥭','🍌','🫐','🍈','🥥','🍐'],
+  // Animals (16)
+  ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🦄'],
+  // Nature (16)
+  ['🌸','🌺','🌻','🌹','🌷','💐','🌿','🍀','🌴','🌵','🍁','🍂','🌾','🪻','🌼','🪷'],
+  // Food (16)
+  ['🍕','🍔','🍟','🌭','🍿','🧁','🍩','🍪','🎂','🍫','🍬','🍭','🧀','🥐','🥨','🍰'],
+  // Sports (16)
+  ['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🏸','🥊','⛳','🎯','🏹','🛹','🥋','🏄'],
+  // Objects (16)
+  ['💎','🔮','🎪','🎭','🎨','🎬','🎤','🎵','🎸','🎺','🥁','🎲','🧩','🎰','🔔','🏆'],
+];
+
+// ─── Level configs ───
+const LEVELS = [];
+for (let i = 0; i < 20; i++) {
+  let cols, rows, types;
+  if (i < 4) {
+    // Levels 1-4: small
+    cols = 4 + (i % 2) * 2;  // 4,6,4,6
+    rows = 4;
+    types = 4 + i;           // 4,5,6,7
+  } else if (i < 8) {
+    // Levels 5-8: medium-small
+    cols = 6;
+    rows = 4 + Math.floor((i - 4) / 2) * 2; // 4,4,6,6
+    types = 6 + (i - 4);
+  } else if (i < 12) {
+    // Levels 9-12: medium
+    cols = 8;
+    rows = 6;
+    types = 8 + (i - 8);
+  } else if (i < 16) {
+    // Levels 13-16: larger
+    cols = 8 + (i >= 14 ? 2 : 0);
+    rows = 6 + (i >= 14 ? 2 : 0);
+    types = 10 + (i - 12);
+  } else {
+    // Levels 17-20: big
+    cols = 10;
+    rows = 8;
+    types = 12 + (i - 16);
+  }
+  LEVELS.push({ cols, rows, types, emojiSet: i % EMOJI_SETS.length });
+}
+
+// ─── Game State ───
+let currentLevel = 0;
+let board = [];       // board[r][c] = emoji index or -1
+let boardRows = 0;
+let boardCols = 0;
+let totalPairs = 0;
+let pairsRemaining = 0;
+let selected = null;  // {r, c}
+let hints = 3;
+let timerVal = 0;
+let timerInterval = null;
+let animating = false;
+let levelStars = new Array(20).fill(0); // 0 = locked/not done, 1-3 stars
+let unlockedLevel = 0; // highest unlocked (0-indexed)
+let cheatMode = false;
+
+// Canvas
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const linkCanvas = document.getElementById('linkCanvas');
+const linkCtx = linkCanvas.getContext('2d');
+
+let CELL = 52;
+const PAD = 1; // extra border cells for pathfinding
+const GAP = 2;
+
+function calcCellSize() {
+  const maxW = window.innerWidth - 20;
+  const maxH = window.innerHeight - 150;
+  const cellW = Math.floor((maxW - (boardCols - 1) * GAP) / boardCols);
+  const cellH = Math.floor((maxH - (boardRows - 1) * GAP) / boardRows);
+  CELL = Math.max(24, Math.min(52, cellW, cellH));
+}
+
+// ─── Load saved progress ───
+function loadProgress() {
+  try {
+    const d = JSON.parse(localStorage.getItem('llk_progress') || '{}');
+    if (d.stars) levelStars = d.stars;
+    if (typeof d.unlocked === 'number') unlockedLevel = d.unlocked;
+  } catch(e) {}
+}
+function saveProgress() {
+  localStorage.setItem('llk_progress', JSON.stringify({ stars: levelStars, unlocked: unlockedLevel }));
+}
+
+// ─── Init Level ───
+function initLevel(lvl) {
+  currentLevel = lvl;
+  const cfg = LEVELS[lvl];
+  boardCols = cfg.cols;
+  boardRows = cfg.rows;
+  hints = 3;
+  selected = null;
+  animating = false;
+  timerVal = 0;
+  clearInterval(timerInterval);
+
+  // Build pairs
+  const totalCells = boardCols * boardRows;
+  totalPairs = totalCells / 2;
+  pairsRemaining = totalPairs;
+
+  const emojis = EMOJI_SETS[cfg.emojiSet].slice(0, cfg.types);
+  let pool = [];
+  // Fill pairs evenly
+  const pairsPerType = Math.floor(totalPairs / cfg.types);
+  const extra = totalPairs % cfg.types;
+  for (let t = 0; t < cfg.types; t++) {
+    const count = pairsPerType + (t < extra ? 1 : 0);
+    for (let k = 0; k < count; k++) {
+      pool.push(t, t);
+    }
+  }
+  shuffle(pool);
+
+  // Fill board
+  board = [];
+  let idx = 0;
+  for (let r = 0; r < boardRows; r++) {
+    board[r] = [];
+    for (let c = 0; c < boardCols; c++) {
+      board[r][c] = pool[idx++];
+    }
+  }
+
+  // Ensure solvable — we don't strictly need to since shuffle is available
+  // but let's at least check if any pair exists
+  calcCellSize();
+  resizeCanvas();
+  updateUI();
+  drawBoard();
+
+  // Start timer
+  timerInterval = setInterval(() => {
+    timerVal++;
+    document.getElementById('timer').textContent = timerVal;
+  }, 1000);
+}
+
+function resizeCanvas() {
+  const w = boardCols * CELL + (boardCols - 1) * GAP;
+  const h = boardRows * CELL + (boardRows - 1) * GAP;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  linkCanvas.style.width = w + 'px';
+  linkCanvas.style.height = h + 'px';
+  linkCanvas.width = w * dpr;
+  linkCanvas.height = h * dpr;
+  linkCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function updateUI() {
+  document.getElementById('levelNum').textContent = currentLevel + 1;
+  document.getElementById('pairsLeft').textContent = pairsRemaining;
+  document.getElementById('hintCount').textContent = hints;
+  document.getElementById('hintBtn').disabled = hints <= 0;
+  const pct = totalPairs > 0 ? ((totalPairs - pairsRemaining) / totalPairs * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ─── Drawing ───
+function cellX(c) { return c * (CELL + GAP); }
+function cellY(r) { return r * (CELL + GAP); }
+
+function drawBoard() {
+  const w = boardCols * CELL + (boardCols - 1) * GAP;
+  const h = boardRows * CELL + (boardRows - 1) * GAP;
+  ctx.clearRect(0, 0, w, h);
+
+  const cfg = LEVELS[currentLevel];
+  const emojis = EMOJI_SETS[cfg.emojiSet];
+
+  for (let r = 0; r < boardRows; r++) {
+    for (let c = 0; c < boardCols; c++) {
+      const v = board[r][c];
+      if (v < 0) continue;
+      const x = cellX(c), y = cellY(r);
+
+      const isSel = selected && selected.r === r && selected.c === c;
+
+      // Card bg
+      ctx.fillStyle = isSel ? 'rgba(212,168,83,0.2)' : 'rgba(255,255,255,0.04)';
+      ctx.strokeStyle = isSel ? 'var(--gold)' : 'rgba(255,255,255,0.08)';
+      roundRect(ctx, x, y, CELL, CELL, 6, true, true);
+
+      if (isSel) {
+        ctx.shadowColor = 'rgba(212,168,83,0.4)';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = '#d4a853';
+        ctx.lineWidth = 2;
+        roundRect(ctx, x, y, CELL, CELL, 6, false, true);
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1;
+      }
+
+      // Emoji
+      ctx.font = '26px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(emojis[v], x + CELL/2, y + CELL/2 + 1);
+    }
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+// ─── Click ───
+canvas.addEventListener('click', (e) => {
+  if (animating) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const c = Math.floor(mx / (CELL + GAP));
+  const r = Math.floor(my / (CELL + GAP));
+
+  if (r < 0 || r >= boardRows || c < 0 || c >= boardCols) return;
+  if (board[r][c] < 0) return;
+
+  // Check within cell bounds
+  const cx = cellX(c), cy = cellY(r);
+  if (mx < cx || mx > cx + CELL || my < cy || my > cy + CELL) return;
+
+  if (!selected) {
+    selected = {r, c};
+    drawBoard();
+    return;
+  }
+
+  if (selected.r === r && selected.c === c) {
+    selected = null;
+    drawBoard();
+    return;
+  }
+
+  // Try to match
+  if (board[selected.r][selected.c] === board[r][c]) {
+    const path = findPath(selected.r, selected.c, r, c);
+    if (path) {
+      animateLink(path, () => {
+        board[selected.r][selected.c] = -1;
+        board[r][c] = -1;
+        pairsRemaining--;
+        selected = null;
+        updateUI();
+        drawBoard();
+        if (pairsRemaining === 0) levelComplete();
+      });
+      return;
+    }
+  }
+
+  // No match or no path
+  selected = {r, c};
+  drawBoard();
+});
+
+// ─── Pathfinding (≤2 turns) ───
+// We use a padded grid: actual board at [1..rows][1..cols], borders are always empty
+function isEmptyOrTarget(r, c, tr, tc) {
+  // Outside padded board
+  if (r < 0 || r > boardRows + 1 || c < 0 || c > boardCols + 1) return false;
+  // Border cells are always empty
+  if (r === 0 || r === boardRows + 1 || c === 0 || c === boardCols + 1) return true;
+  // Convert to board coords
+  const br = r - 1, bc = c - 1;
+  if (br === tr && bc === tc) return true;
+  return board[br][bc] < 0;
+}
+
+function findPath(r1, c1, r2, c2) {
+  // Convert to padded coords
+  const pr1 = r1 + 1, pc1 = c1 + 1;
+  const pr2 = r2 + 1, pc2 = c2 + 1;
+
+  // 0 turns: straight line
+  const straight = tryStraight(pr1, pc1, pr2, pc2, r2, c2);
+  if (straight) return straight.map(p => [p[0]-1, p[1]-1]);
+
+  // 1 turn: try two corners
+  const oneTurn = tryOneTurn(pr1, pc1, pr2, pc2, r2, c2);
+  if (oneTurn) return oneTurn.map(p => [p[0]-1, p[1]-1]);
+
+  // 2 turns
+  const twoTurn = tryTwoTurns(pr1, pc1, pr2, pc2, r2, c2);
+  if (twoTurn) return twoTurn.map(p => [p[0]-1, p[1]-1]);
+
+  return null;
+}
+
+function tryStraight(r1, c1, r2, c2, tr, tc) {
+  if (r1 === r2) {
+    const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
+    for (let c = minC + 1; c < maxC; c++) {
+      if (!isEmptyOrTarget(r1, c, tr, tc)) return null;
+    }
+    return [[r1, c1], [r2, c2]];
+  }
+  if (c1 === c2) {
+    const minR = Math.min(r1, r2), maxR = Math.max(r1, r2);
+    for (let r = minR + 1; r < maxR; r++) {
+      if (!isEmptyOrTarget(r, c1, tr, tc)) return null;
+    }
+    return [[r1, c1], [r2, c2]];
+  }
+  return null;
+}
+
+function canWalkH(r, c1, c2, tr, tc) {
+  const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
+  for (let c = minC; c <= maxC; c++) {
+    if (c === c1) continue;
+    if (!isEmptyOrTarget(r, c, tr, tc)) return false;
+  }
+  return true;
+}
+
+function canWalkV(c, r1, r2, tr, tc) {
+  const minR = Math.min(r1, r2), maxR = Math.max(r1, r2);
+  for (let r = minR; r <= maxR; r++) {
+    if (r === r1) continue;
+    if (!isEmptyOrTarget(r, c, tr, tc)) return false;
+  }
+  return true;
+}
+
+function tryOneTurn(r1, c1, r2, c2, tr, tc) {
+  // Corner at (r1, c2)
+  if (isEmptyOrTarget(r1, c2, tr, tc)) {
+    if (canWalkH(r1, c1, c2, tr, tc) && canWalkV(c2, r1, r2, tr, tc)) {
+      return [[r1, c1], [r1, c2], [r2, c2]];
+    }
+  }
+  // Corner at (r2, c1)
+  if (isEmptyOrTarget(r2, c1, tr, tc)) {
+    if (canWalkV(c1, r1, r2, tr, tc) && canWalkH(r2, c1, c2, tr, tc)) {
+      return [[r1, c1], [r2, c1], [r2, c2]];
+    }
+  }
+  return null;
+}
+
+function tryTwoTurns(r1, c1, r2, c2, tr, tc) {
+  // Horizontal scan: for each row r, try path r1,c1 -> r1,? -> r,? -> r2,c2
+  // Actually: scan intermediate lines
+  // Vertical intermediate line at column c
+  for (let c = 0; c <= boardCols + 1; c++) {
+    if (c === c1 && c === c2) continue; // would be 0 or 1 turn
+    if (!isEmptyOrTarget(r1, c, tr, tc) && !(r1-1 === tr && c-1 === tc)) continue;
+    if (!isEmptyOrTarget(r2, c, tr, tc) && !(r2-1 === tr && c-1 === tc)) continue;
+
+    if (canWalkH(r1, c1, c, tr, tc) && canWalkV(c, r1, r2, tr, tc) && canWalkH(r2, c, c2, tr, tc)) {
+      return [[r1,c1],[r1,c],[r2,c],[r2,c2]];
+    }
+  }
+  // Horizontal intermediate line at row r
+  for (let r = 0; r <= boardRows + 1; r++) {
+    if (r === r1 && r === r2) continue;
+    if (!isEmptyOrTarget(r, c1, tr, tc) && !(r-1 === tr && c1-1 === tc)) continue;
+    if (!isEmptyOrTarget(r, c2, tr, tc) && !(r-1 === tr && c2-1 === tc)) continue;
+
+    if (canWalkV(c1, r1, r, tr, tc) && canWalkH(r, c1, c2, tr, tc) && canWalkV(c2, r, r2, tr, tc)) {
+      return [[r1,c1],[r,c1],[r,c2],[r2,c2]];
+    }
+  }
+  return null;
+}
+
+// ─── Link Animation ───
+function animateLink(path, onDone) {
+  animating = true;
+  // Convert path coords to pixel centers
+  const pts = path.map(([r,c]) => ({
+    x: cellX(c) + CELL/2,
+    y: cellY(r) + CELL/2,
+  }));
+
+  const w = parseInt(linkCanvas.style.width);
+  const h = parseInt(linkCanvas.style.height);
+
+  let alpha = 1;
+  const draw = () => {
+    linkCtx.clearRect(0, 0, w, h);
+    linkCtx.strokeStyle = `rgba(78,205,196,${alpha})`;
+    linkCtx.lineWidth = 3;
+    linkCtx.lineJoin = 'round';
+    linkCtx.beginPath();
+    linkCtx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      linkCtx.lineTo(pts[i].x, pts[i].y);
+    }
+    linkCtx.stroke();
+
+    // Glow
+    linkCtx.strokeStyle = `rgba(78,205,196,${alpha * 0.3})`;
+    linkCtx.lineWidth = 8;
+    linkCtx.beginPath();
+    linkCtx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      linkCtx.lineTo(pts[i].x, pts[i].y);
+    }
+    linkCtx.stroke();
+  };
+
+  draw();
+  setTimeout(() => {
+    alpha = 0.5;
+    draw();
+    setTimeout(() => {
+      linkCtx.clearRect(0, 0, w, h);
+      animating = false;
+      onDone();
+    }, 120);
+  }, 180);
+}
+
+// ─── Find any valid pair (for hint & solvability) ───
+function findAnyPair() {
+  const cells = [];
+  for (let r = 0; r < boardRows; r++)
+    for (let c = 0; c < boardCols; c++)
+      if (board[r][c] >= 0) cells.push({r, c, v: board[r][c]});
+
+  // Group by value
+  const groups = {};
+  cells.forEach(cell => {
+    if (!groups[cell.v]) groups[cell.v] = [];
+    groups[cell.v].push(cell);
+  });
+
+  for (const v in groups) {
+    const g = groups[v];
+    for (let i = 0; i < g.length; i++) {
+      for (let j = i + 1; j < g.length; j++) {
+        if (findPath(g[i].r, g[i].c, g[j].r, g[j].c)) {
+          return [g[i], g[j]];
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ─── Hint ───
+function useHint() {
+  if (hints <= 0 || animating) return;
+  const pair = findAnyPair();
+  if (!pair) {
+    shuffleBoard();
+    return;
+  }
+  hints--;
+  updateUI();
+
+  // Flash the pair
+  selected = pair[0];
+  drawBoard();
+  setTimeout(() => {
+    // Highlight second
+    const x2 = cellX(pair[1].c), y2 = cellY(pair[1].r);
+    ctx.strokeStyle = '#4ecdc4';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(78,205,196,0.5)';
+    ctx.shadowBlur = 8;
+    roundRect(ctx, x2, y2, CELL, CELL, 6, false, true);
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1;
+  }, 50);
+}
+
+// ─── Shuffle ───
+function shuffleBoard() {
+  const vals = [];
+  for (let r = 0; r < boardRows; r++)
+    for (let c = 0; c < boardCols; c++)
+      if (board[r][c] >= 0) vals.push(board[r][c]);
+
+  shuffle(vals);
+  let idx = 0;
+  for (let r = 0; r < boardRows; r++)
+    for (let c = 0; c < boardCols; c++)
+      if (board[r][c] >= 0) board[r][c] = vals[idx++];
+
+  selected = null;
+  drawBoard();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// ─── Level Complete ───
+function levelComplete() {
+  clearInterval(timerInterval);
+
+  // Stars based on time
+  const cfg = LEVELS[currentLevel];
+  const cellCount = cfg.rows * cfg.cols;
+  const par = cellCount * 1.2; // ~1.2 seconds per cell as par
+  let stars = 3;
+  if (timerVal > par * 1.5) stars = 2;
+  if (timerVal > par * 2.5) stars = 1;
+
+  if (stars > levelStars[currentLevel]) levelStars[currentLevel] = stars;
+  if (currentLevel + 1 > unlockedLevel && currentLevel < 19) {
+    unlockedLevel = currentLevel + 1;
+  }
+  saveProgress();
+
+  const starStr = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+  document.getElementById('winStars').textContent = starStr;
+  document.getElementById('winTitle').textContent = currentLevel === 19 ? '🎉 全部通关！' : '过关！';
+  document.getElementById('winMsg').textContent = `用时 ${timerVal} 秒`;
+  document.getElementById('nextBtn').style.display = currentLevel < 19 ? '' : 'none';
+  document.getElementById('winOverlay').classList.add('active');
+}
+
+function nextLevel() {
+  document.getElementById('winOverlay').classList.remove('active');
+  if (currentLevel < 19) {
+    initLevel(currentLevel + 1);
+  }
+}
+
+// ─── Level Select ───
+function showLevelSelect() {
+  const grid = document.getElementById('levelGrid');
+  grid.innerHTML = '';
+  const effectiveUnlocked = cheatMode ? 19 : unlockedLevel;
+  for (let i = 0; i < 20; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'level-cell';
+    if (i > effectiveUnlocked) cell.classList.add('locked');
+    if (i === currentLevel) cell.classList.add('current');
+
+    cell.innerHTML = `${i + 1}<div class="cell-stars">${
+      levelStars[i] > 0 ? '⭐'.repeat(levelStars[i]) : ''
+    }</div>`;
+
+    if (i <= effectiveUnlocked) {
+      cell.addEventListener('click', () => {
+        closeLevelSelect();
+        document.getElementById('winOverlay').classList.remove('active');
+        initLevel(i);
+      });
+    }
+    grid.appendChild(cell);
+  }
+  // Update cheat button style
+  updateCheatBtn();
+  document.getElementById('levelOverlay').classList.add('active');
+}
+
+function toggleCheat() {
+  cheatMode = !cheatMode;
+  // Refresh level grid without closing overlay
+  const grid = document.getElementById('levelGrid');
+  grid.innerHTML = '';
+  const effectiveUnlocked = cheatMode ? 19 : unlockedLevel;
+  for (let i = 0; i < 20; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'level-cell';
+    if (i > effectiveUnlocked) cell.classList.add('locked');
+    if (i === currentLevel) cell.classList.add('current');
+    cell.innerHTML = `${i + 1}<div class="cell-stars">${
+      levelStars[i] > 0 ? '⭐'.repeat(levelStars[i]) : ''
+    }</div>`;
+    if (i <= effectiveUnlocked) {
+      cell.addEventListener('click', () => {
+        closeLevelSelect();
+        document.getElementById('winOverlay').classList.remove('active');
+        initLevel(i);
+      });
+    }
+    grid.appendChild(cell);
+  }
+  updateCheatBtn();
+}
+
+function updateCheatBtn() {
+  const cb = document.getElementById('cheatBtn');
+  if (cheatMode) {
+    cb.style.opacity = '1';
+    cb.style.borderColor = '#e74c3c';
+    cb.style.color = '#e74c3c';
+    cb.innerText = '🔓 作弊模式 ON';
+  } else {
+    cb.style.opacity = '0.5';
+    cb.style.borderColor = '#444';
+    cb.style.color = '#888';
+    cb.innerText = '🔓 作弊模式';
+  }
+}
+
+// Bind cheat button
+document.getElementById('cheatBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  toggleCheat();
+});
+
+function closeLevelSelect() {
+  document.getElementById('levelOverlay').classList.remove('active');
+}
+
+function resetAll() {
+  levelStars.fill(0);
+  unlockedLevel = 0;
+  saveProgress();
+  document.getElementById('allClearOverlay').classList.remove('active');
+  document.getElementById('winOverlay').classList.remove('active');
+  initLevel(0);
+}
+
+// ─── Boot ───
+loadProgress();
+initLevel(unlockedLevel); // Start at highest unlocked
+
+window.addEventListener('resize', () => {
+  calcCellSize();
+  resizeCanvas();
+  drawBoard();
+});
+</script>
+
+</body>
+</html>
